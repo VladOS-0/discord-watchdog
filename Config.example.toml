@@ -1,0 +1,24 @@
+# Name of the resource, used in embeds and messages.
+resource_name = "BYOND"
+
+# Address of the resource (IP or DNS).
+resource_addr = "hub.byond.com"
+
+# Number of consecutive successful/unsuccessful attempts required before notifying users.
+required_attempts_before_notification = 3
+
+# ID of the channel where notifications will be sent.
+channel = 1384313311879787654
+
+# ID of the role that will be pinged when the resource comes back online.
+role_to_notify = 1367257075202786542
+
+# Ping timeout settings.
+[timeout]
+secs = 5
+nanos = 0
+
+# Delay between ping attempts.
+[interval_between_attempts]
+secs = 10
+nanos = 0
