@@ -1,0 +1,5 @@
+/target
+.env
+Config.toml
+Data.toml
+*.log
