@@ -49,7 +49,7 @@ pub async fn notify_status_change(
         None => "fellas".to_string(),
     };
     let optimistic = config_lock.optimistic;
-    let channel_id = config_lock.channel.clone();
+    let channel_id = config_lock.channel;
     let channel = match channel_id {
         Some(id) => {
             let channel_result = http.get_channel(id).await;
