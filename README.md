@@ -37,10 +37,11 @@ All slash commands except `info` require `MANAGE_CHANNELS` (empirical choice) pe
 | `config name` | Changes the monitored resource's name |
 | `config address` | Updates the monitored resource's address |
 | `config channel` | Changes the notification channel |
-| `config role` | Modifies the role pinged when the resource recovers |
+| `config role` | Modifies the role pinged when the resource changes status |
 | `config interval` | Adjusts the delay between ping attempts |
 | `config timeout` | Changes the ping attempt timeout duration |
 | `config attempts` | Changes amount of attempts, neccessary to change resource's status |
+| `config message` | Modifies messages, which are sent by bot on status change. Use %%RESOURCE%% and %%ROLE%% template variables |
 | `debug logs` | Sends ephemeral `debug.log` |
 | `debug data` | Sends ephemeral `Data.toml` |
 | `info` | Displays information about the bot |
