@@ -117,7 +117,7 @@ impl SavedData {
         *data.status.write().await = self.status;
         *data.used_messages.write().await = self.used_messages.clone();
         data.attempts_before_notification
-            .store(self.attempts_before_notification, Ordering::SeqCst);
+            .store(self.attempts_before_notification, Ordering::Relaxed);
         *data.last_status_change.write().await = self.last_status_change;
         *data.config.write().await = self.config.clone();
     }
@@ -125,7 +125,7 @@ impl SavedData {
         Self {
             status: (*data.status.read().await),
             used_messages: (*data.used_messages.read().await).clone(),
-            attempts_before_notification: data.attempts_before_notification.load(Ordering::SeqCst),
+            attempts_before_notification: data.attempts_before_notification.load(Ordering::Relaxed),
             last_status_change: (*data.last_status_change.read().await),
             config: (*data.config.read().await).clone(),
         }
@@ -147,6 +147,7 @@ pub struct Config {
     interval_between_attempts: Duration,
     channel: Option<ChannelId>,
     role_to_notify: Option<RoleId>,
+    optimistic: bool,
 }
 
 impl Default for Config {
@@ -159,6 +160,7 @@ impl Default for Config {
             interval_between_attempts: Duration::from_secs(DEFAULT_INTERVAL_BETWEEN_ATTEMPTS_SECS),
             channel: None,
             role_to_notify: None,
+            optimistic: false,
         }
     }
 }

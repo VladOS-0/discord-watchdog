@@ -10,8 +10,8 @@ use crate::{
 /// Displays information about the bot
 #[poise::command(slash_command, user_cooldown = 5)]
 pub async fn info(ctx: Context<'_>) -> Result<(), Error> {
-    if let Err(err) = ctx.defer_ephemeral().await {
-        log::error!("Failed to defer ephemeral reply: {}", err);
+    if let Err(err) = ctx.defer().await {
+        log::error!("Failed to defer reply: {}", err);
     };
     let reply_result = send_reply(
         ctx,
@@ -52,7 +52,7 @@ pub async fn info(ctx: Context<'_>) -> Result<(), Error> {
 /// Base debug command. Can not be called directly.
 #[poise::command(
     slash_command,
-    default_member_permissions = "MENTION_EVERYONE",
+    default_member_permissions = "MANAGE_CHANNELS",
     subcommands("logs", "data")
 )]
 pub async fn debug(_: Context<'_>) -> Result<(), Error> {

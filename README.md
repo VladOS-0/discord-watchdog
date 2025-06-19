@@ -12,7 +12,7 @@ Originally created to monitor the [BYOND](https://www.byond.com/) Hub during per
 - Ping users when the resource comes back online  
 - Only send a silent notification (no ping) when the resource goes down  
 
-To modify this behavior (e.g., to ping users during outages), you'll need to adjust the code.
+To reverse this behavior (to ping users when resource goes down), you'll need to change `optimistic` to `true` in the `Config.toml`.
 
 ## Screenshots
 ![Bot in action](images/screenshot.png)
@@ -29,7 +29,7 @@ Configuration is managed via `Config.toml` in the bot's executable directory. Se
 
 ## Commands
 
-All slash commands except `info` require `MENTION_EVERYONE` (empirical choice) permissions:
+All slash commands except `info` require `MANAGE_CHANNELS` (empirical choice) permissions:
 
 | Command | Description |
 |---------|-------------|
@@ -40,6 +40,7 @@ All slash commands except `info` require `MENTION_EVERYONE` (empirical choice) p
 | `config role` | Modifies the role pinged when the resource recovers |
 | `config interval` | Adjusts the delay between ping attempts |
 | `config timeout` | Changes the ping attempt timeout duration |
+| `config attempts` | Changes amount of attempts, neccessary to change resource's status |
 | `debug logs` | Sends ephemeral `debug.log` |
 | `debug data` | Sends ephemeral `Data.toml` |
 | `info` | Displays information about the bot |

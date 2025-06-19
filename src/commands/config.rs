@@ -10,8 +10,10 @@ use crate::{Config, Context, DEFAULT_CONFIG_PATH, Error, ping::resolve_ip, save_
 /// Base config command. Can not be called directly.
 #[poise::command(
     slash_command,
-    default_member_permissions = "MENTION_EVERYONE",
-    subcommands("reset", "name", "address", "channel", "role", "interval", "timeout")
+    default_member_permissions = "MANAGE_CHANNELS",
+    subcommands(
+        "reset", "name", "address", "channel", "role", "interval", "timeout", "attempts"
+    )
 )]
 pub async fn config(_: Context<'_>) -> Result<(), Error> {
     Ok(())
@@ -305,6 +307,45 @@ async fn timeout(
         CreateReply::default()
             .ephemeral(true)
             .content(format!("Changed ping timeout to {}!", timeout)),
+    )
+    .await;
+    if let Err(err) = reply_result {
+        log::error!("Failed to send reply to a slash command: {}", err)
+    }
+
+    Ok(())
+}
+
+/// Changes required amount of consecutive attempts, after which resource will change its state
+#[poise::command(slash_command, user_cooldown = 12)]
+async fn attempts(
+    ctx: Context<'_>,
+    #[description = "Resource's status is up && This value is 3 && Ping failed 3 times -> Status changes to down"]
+    #[min = 1]
+    // 30 attempts. Hardcoded, yeaaaaaaaaaaaaah
+    #[max = 30]
+    attempts: u8,
+) -> Result<(), Error> {
+    if let Err(err) = ctx.defer_ephemeral().await {
+        log::error!("Failed to defer ephemeral reply: {}", err);
+    };
+    ctx.data()
+        .config
+        .write()
+        .await
+        .required_attempts_before_notification = attempts;
+    log::info!(
+        "User {} ({}) changed required attempts to {}",
+        ctx.author().name,
+        ctx.author().id,
+        attempts
+    );
+    save_data(ctx.data()).await;
+    let reply_result = send_reply(
+        ctx,
+        CreateReply::default()
+            .ephemeral(true)
+            .content(format!("Changed required attempts to {}!", attempts)),
     )
     .await;
     if let Err(err) = reply_result {

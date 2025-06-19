@@ -9,6 +9,8 @@ pub async fn update_status(status: ResourceStatus, data: Data, http: Arc<Http>) 
     let old_status = *old_status_lock;
     drop(old_status_lock);
     if status == old_status {
+        data.attempts_before_notification
+            .store(0, Ordering::Relaxed);
         return;
     }
 
@@ -19,11 +21,12 @@ pub async fn update_status(status: ResourceStatus, data: Data, http: Arc<Http>) 
 
     if data
         .attempts_before_notification
-        .fetch_add(1, Ordering::SeqCst)
+        .fetch_add(1, Ordering::Relaxed)
         >= required_attempts_before_notification
     {
         log::info!("Changed status from {} to {}", old_status, status);
-        data.attempts_before_notification.store(0, Ordering::SeqCst);
+        data.attempts_before_notification
+            .store(0, Ordering::Relaxed);
         *data.status.write().await = status;
         *data.last_status_change.write().await = Timestamp::now();
         notify_status_change(old_status, status, data.clone(), http.clone()).await;
@@ -37,14 +40,16 @@ pub async fn notify_status_change(
     data: Data,
     http: Arc<Http>,
 ) {
-    let resource_name = data.config.read().await.resource_name.clone();
-    let channel_id = data.config.read().await.channel;
-    let role_ping = match data.config.read().await.role_to_notify {
+    let config_lock = data.config.read().await;
+    let resource_name = config_lock.resource_name.clone();
+    let role_ping = match config_lock.role_to_notify {
         Some(id) => {
             format!("<@&{}>", id)
         }
         None => "fellas".to_string(),
     };
+    let optimistic = config_lock.optimistic;
+    let channel_id = config_lock.channel.clone();
     let channel = match channel_id {
         Some(id) => {
             let channel_result = http.get_channel(id).await;
@@ -63,6 +68,7 @@ pub async fn notify_status_change(
             return;
         }
     };
+    drop(config_lock);
 
     match (old_status, new_status) {
         (_, ResourceStatus::Unknown) => {
@@ -72,12 +78,13 @@ pub async fn notify_status_change(
             update_embed(&resource_name, new_status, data, channel, http.clone()).await;
         }
         (ResourceStatus::Up, ResourceStatus::Down) => {
+            let mut message = "Nevermind, it's dead again. Boowomp :sob:.".to_string();
+            if optimistic {
+                message = format!("{} has gone down, {}!", resource_name, role_ping);
+            }
             let send_result = channel
                 .id()
-                .send_message(
-                    http.clone(),
-                    CreateMessage::new().content("Nevermind, it's dead again. Boowomp :sob:."),
-                )
+                .send_message(http.clone(), CreateMessage::new().content(message))
                 .await;
             match send_result {
                 Ok(message) => {
@@ -91,15 +98,13 @@ pub async fn notify_status_change(
             update_embed(&resource_name, new_status, data, channel, http.clone()).await;
         }
         (ResourceStatus::Down, ResourceStatus::Up) => {
+            let mut message = format!("{} is back online, {}!", resource_name, role_ping);
+            if optimistic {
+                message = "Okay, it's up again.".to_string();
+            }
             let send_result = channel
                 .id()
-                .send_message(
-                    http.clone(),
-                    CreateMessage::new().content(format!(
-                        "{} is back online, {}! Hurry up!",
-                        resource_name, role_ping
-                    )),
-                )
+                .send_message(http.clone(), CreateMessage::new().content(message))
                 .await;
             match send_result {
                 Ok(message) => {
