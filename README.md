@@ -12,7 +12,7 @@ Originally created to monitor the [BYOND](https://www.byond.com/) Hub during per
 - Ping users when the resource comes back online  
 - Only send a silent notification (no ping) when the resource goes down  
 
-To reverse this behavior (to ping users when resource goes down), you'll need to change `optimistic` to `true` in the `Config.toml`.
+To change this behaviour, you can customize messages in `Config.toml`.
 
 ## Screenshots
 ![Bot in action](images/screenshot.png)

@@ -16,6 +16,8 @@ use poise::serenity_prelude::{ChannelId, MessageId, RoleId, Timestamp};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{OnceCell, RwLock};
 
+use crate::status::{DEFAULT_DOWN_MESSAGE, DEFAULT_UP_MESSAGE};
+
 pub const DEFAULT_RESOURCE_NAME: &str = "BYOND";
 pub const DEFAULT_RESOURCE_ADDR: &str = "hub.byond.com";
 pub const DEFAULT_ATTEMPTS_BEFORE_NOTIFICATION: u8 = 3;
@@ -147,7 +149,8 @@ pub struct Config {
     interval_between_attempts: Duration,
     channel: Option<ChannelId>,
     role_to_notify: Option<RoleId>,
-    optimistic: bool,
+    up_message: String,
+    down_message: String,
 }
 
 impl Default for Config {
@@ -160,7 +163,8 @@ impl Default for Config {
             interval_between_attempts: Duration::from_secs(DEFAULT_INTERVAL_BETWEEN_ATTEMPTS_SECS),
             channel: None,
             role_to_notify: None,
-            optimistic: false,
+            up_message: DEFAULT_UP_MESSAGE.to_string(),
+            down_message: DEFAULT_DOWN_MESSAGE.to_string(),
         }
     }
 }

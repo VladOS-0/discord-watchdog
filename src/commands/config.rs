@@ -7,12 +7,18 @@ use poise::{
 
 use crate::{Config, Context, DEFAULT_CONFIG_PATH, Error, ping::resolve_ip, save_data};
 
+#[derive(poise::ChoiceParameter, Debug, Clone, Copy)]
+enum Status {
+    Up,
+    Down,
+}
+
 /// Base config command. Can not be called directly.
 #[poise::command(
     slash_command,
     default_member_permissions = "MANAGE_CHANNELS",
     subcommands(
-        "reset", "name", "address", "channel", "role", "interval", "timeout", "attempts"
+        "reset", "name", "address", "channel", "role", "interval", "timeout", "attempts", "message"
     )
 )]
 pub async fn config(_: Context<'_>) -> Result<(), Error> {
@@ -114,6 +120,7 @@ async fn address(
     ctx: Context<'_>,
     #[description = "Resource address, which will be pinged"]
     #[max_length = 45]
+    #[min_length = 1]
     addr: String,
 ) -> Result<(), Error> {
     if let Err(err) = ctx.defer_ephemeral().await {
@@ -346,6 +353,47 @@ async fn attempts(
         CreateReply::default()
             .ephemeral(true)
             .content(format!("Changed required attempts to {}!", attempts)),
+    )
+    .await;
+    if let Err(err) = reply_result {
+        log::error!("Failed to send reply to a slash command: {}", err)
+    }
+
+    Ok(())
+}
+
+/// Changes required amount of consecutive attempts, after which resource will change its state
+#[poise::command(slash_command, user_cooldown = 30)]
+async fn message(
+    ctx: Context<'_>,
+    #[description = "Whether your message will be sent on Up or Down resource's status change"]
+    status: Status,
+    #[description = "Message, which will be sent. Remember about %%RESOURCE%% and %%ROLE%% template variables!"]
+    #[max_length = 300]
+    #[min_length = 1]
+    message: String,
+) -> Result<(), Error> {
+    if let Err(err) = ctx.defer_ephemeral().await {
+        log::error!("Failed to defer ephemeral reply: {}", err);
+    };
+    match status {
+        Status::Up => ctx.data().config.write().await.up_message = message.clone(),
+        Status::Down => ctx.data().config.write().await.down_message = message.clone(),
+    }
+
+    log::info!(
+        "User {} ({}) changed {:?} message to {}",
+        ctx.author().name,
+        ctx.author().id,
+        status,
+        message
+    );
+    save_data(ctx.data()).await;
+    let reply_result = send_reply(
+        ctx,
+        CreateReply::default()
+            .ephemeral(true)
+            .content(format!("Changed {:?} message to {}!", status, message)),
     )
     .await;
     if let Err(err) = reply_result {

@@ -13,8 +13,11 @@ channel = 1384313311879787654
 # ID of the role that will be pinged when the resource comes back online.
 role_to_notify = 1367257075202786542
 
-# If this is false, bot will ping the role when the resource goes online. Otherwise, it will ping the role when it goes offline.
-optimistic = false
+# This message will be sent when resource becomes accessible
+up_message = "%%RESOURCE%% is back online, %%ROLE%%!"
+
+# This message will be sent when resource goes down
+down_message = "Nevermind, it's dead again. Boowomp :sob:."
 
 # Ping timeout settings.
 [timeout]

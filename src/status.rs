@@ -1,8 +1,16 @@
 use std::sync::{Arc, atomic::Ordering};
 
-use poise::serenity_prelude::{Channel, CreateEmbed, CreateMessage, Http, Timestamp};
+use poise::serenity_prelude::{Channel, CreateEmbed, CreateMessage, Http, RoleId, Timestamp};
 
 use crate::{Data, ResourceStatus, save_data};
+
+pub const DEFAULT_UP_MESSAGE: &str = "%%RESOURCE%% is back online, %%ROLE%%!";
+pub const DEFAULT_DOWN_MESSAGE: &str = "Nevermind, it's dead again. Boowomp :sob:.";
+
+const ROLE_FALLBACK_STRING: &str = "people";
+
+const TEMPLATE_RESOURCE_NAME: &str = "%%RESOURCE%%";
+const TEMPLATE_ROLE_PING: &str = "%%ROLE%%";
 
 pub async fn update_status(status: ResourceStatus, data: Data, http: Arc<Http>) {
     let old_status_lock = data.status.read().await;
@@ -42,13 +50,7 @@ pub async fn notify_status_change(
 ) {
     let config_lock = data.config.read().await;
     let resource_name = config_lock.resource_name.clone();
-    let role_ping = match config_lock.role_to_notify {
-        Some(id) => {
-            format!("<@&{}>", id)
-        }
-        None => "fellas".to_string(),
-    };
-    let optimistic = config_lock.optimistic;
+    let role_id = config_lock.role_to_notify;
     let channel_id = config_lock.channel;
     let channel = match channel_id {
         Some(id) => {
@@ -78,10 +80,11 @@ pub async fn notify_status_change(
             update_embed(&resource_name, new_status, data, channel, http.clone()).await;
         }
         (ResourceStatus::Up, ResourceStatus::Down) => {
-            let mut message = "Nevermind, it's dead again. Boowomp :sob:.".to_string();
-            if optimistic {
-                message = format!("{} has gone down, {}!", resource_name, role_ping);
-            }
+            let message: String = replace_templates(
+                data.config.read().await.down_message.as_str(),
+                &resource_name,
+                &role_id,
+            );
             let send_result = channel
                 .id()
                 .send_message(http.clone(), CreateMessage::new().content(message))
@@ -98,10 +101,11 @@ pub async fn notify_status_change(
             update_embed(&resource_name, new_status, data, channel, http.clone()).await;
         }
         (ResourceStatus::Down, ResourceStatus::Up) => {
-            let mut message = format!("{} is back online, {}!", resource_name, role_ping);
-            if optimistic {
-                message = "Okay, it's up again.".to_string();
-            }
+            let message: String = replace_templates(
+                data.config.read().await.up_message.as_str(),
+                &resource_name,
+                &role_id,
+            );
             let send_result = channel
                 .id()
                 .send_message(http.clone(), CreateMessage::new().content(message))
@@ -256,4 +260,16 @@ pub fn generate_embed(
         ("Address", addr, false),
     ]);
     new_embed
+}
+
+fn replace_templates(message: &str, resource_name: &str, role_id: &Option<RoleId>) -> String {
+    let role_ping = match role_id {
+        Some(id) => {
+            format!("<@&{}>", id)
+        }
+        None => ROLE_FALLBACK_STRING.to_string(),
+    };
+    message
+        .replace(TEMPLATE_RESOURCE_NAME, resource_name)
+        .replace(TEMPLATE_ROLE_PING, role_ping.as_str())
 }
