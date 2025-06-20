@@ -106,6 +106,7 @@ mod tests {
     const FAILING_HEALTHCHECK_ADDR: &str = "fwrgrwetf3";
 
     #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
     async fn healthcheck_success() {
         let icmp_sequence: u16 = 0;
         let icmp_id: u16 = process::id() as u16;
@@ -127,6 +128,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
     async fn healthcheck_timeout() {
         let icmp_sequence: u16 = 0;
         let icmp_id: u16 = process::id() as u16;
@@ -148,6 +150,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
     async fn healthcheck_error() {
         let icmp_sequence: u16 = 0;
         let icmp_id: u16 = process::id() as u16;

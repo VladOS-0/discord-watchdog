@@ -20,6 +20,10 @@ tokio = {version = "1.45.1", features = [
 ]}
 toml = "0.8.23"
 
+[features]
+# This feature is used while testing in the GitHub Actions. It disables tests that are using ICMP, because raw network access is prohibited.
+ci = []
+
 [profile.release]
 opt-level = 3
 lto = "fat"
