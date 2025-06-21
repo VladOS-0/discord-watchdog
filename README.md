@@ -22,7 +22,7 @@ Customize messages in `Config.toml` if you want to change this behaviour.
 Configuration is managed via `Config.toml` in the bot's executable directory. See `Config.example.toml` for reference syntax.
 
 > [!IMPORTANT]  
-> You **must** set the `master_server` setting and replace `[server_configs.1159410563235822656]` with `[server_configs.*your_master_server_id*]` (where `*your_master_server_id*` is the ID you set earlier). ([Image](server_id.png)).
+> You **must** set the `master_server` setting and replace `[server_configs.1159410563235822656]` with `[server_configs.*your_master_server_id*]` (where `*your_master_server_id*` is the ID you set earlier). ([Image](images/server_id.png)).
 
 If you configure everything correctly, your server will be automatically registered as the **Master Server**.
 - Commands marked with `[M ONLY]` can **only** be run on the **Master Server**.
