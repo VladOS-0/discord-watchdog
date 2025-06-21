@@ -18,15 +18,17 @@ pub async fn ping_task(data: Data, http: Arc<Http>) -> Result<(), task::JoinErro
         loop {
             interval.tick().await;
             icmp_sequence += 1;
+
             let config_lock = data.config.read().await;
             let interval_duration = config_lock.ping_config.interval_between_attempts;
             let timeout = config_lock.ping_config.timeout;
-            let addr = &config_lock.ping_config.resource_addr;
+            let addr = config_lock.ping_config.resource_addr.clone();
+            drop(config_lock);
+
             interval = time::interval(interval_duration);
             interval.tick().await;
 
-            let response = healthcheck(addr, timeout, icmp_sequence, icmp_id).await;
-            drop(config_lock);
+            let response = healthcheck(&addr, timeout, icmp_sequence, icmp_id).await;
 
             match response {
                 Ok(success) => {
