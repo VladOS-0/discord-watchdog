@@ -1,30 +1,42 @@
+#
+# MASTER CONFIG - this settings can only be set by the bot's hoster
+#
+
+# Server, where all config commands can be executed. Do not forget to change it!
+master_server = 11593532642822656
+# Maximum number of servers, which can be registered in your bot (including master server)
+max_servers = 1
+
+# Configuration of what resource will be pinged and how
+[ping_config]
 # Name of the resource, used in embeds and messages.
 resource_name = "BYOND"
-
 # Address of the resource (IP or DNS).
 resource_addr = "hub.byond.com"
-
 # Number of consecutive successful/unsuccessful attempts required before notifying users.
 required_attempts_before_notification = 3
-
-# ID of the channel where notifications will be sent.
-channel = 1384313311879787654
-
-# ID of the role that will be pinged when the resource comes back online.
-role_to_notify = 1367257075202786542
-
-# This message will be sent when resource becomes accessible
-up_message = "%%RESOURCE%% is back online, %%ROLE%%!"
-
-# This message will be sent when resource goes down
-down_message = "Nevermind, it's dead again. Boowomp :sob:."
-
 # Ping timeout settings.
-[timeout]
+[ping_config.timeout]
 secs = 5
 nanos = 0
-
 # Delay between ping attempts.
-[interval_between_attempts]
+[ping_config.interval_between_attempts]
 secs = 10
 nanos = 0
+
+#
+# server CONFIG
+#
+
+# Settings, unique for each server. Number after "server_configs." - your server's ID. Do not forget to change it!
+[server_configs.1159410563235822656]
+# Determines the server name in /server show command
+name = "Cool Master Server (Rename me in Config.toml!)"
+# ID of the channel where notifications will be sent.
+channel = 1384253331355745576
+# ID of the role that will be pinged when the resource comes back online.
+role_to_notify = 1384257073531459316
+# This message will be sent when resource becomes accessible
+up_message = "%%RESOURCE%% is back online, %%ROLE%%!"
+# This message will be sent when resource goes down
+down_message = "Nevermind, it's dead again. Boowomp :sob:."

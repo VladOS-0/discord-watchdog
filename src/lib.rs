@@ -3,6 +3,7 @@ pub mod ping;
 mod status;
 
 use std::{
+    collections::BTreeMap,
     fmt::Display,
     path::Path,
     sync::{
@@ -12,7 +13,7 @@ use std::{
     time::Duration,
 };
 
-use poise::serenity_prelude::{ChannelId, MessageId, RoleId, Timestamp};
+use poise::serenity_prelude::{ChannelId, GuildId, MessageId, RoleId, Timestamp};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{OnceCell, RwLock};
 
@@ -56,7 +57,7 @@ pub type Data = Arc<AppData>;
 #[derive(Default, Debug)]
 pub struct AppData {
     status: RwLock<ResourceStatus>,
-    used_messages: RwLock<UsedMessages>,
+    used_messages: RwLock<BTreeMap<GuildId, ServerUsedMessages>>,
     attempts_before_notification: AtomicU8,
     last_status_change: RwLock<Timestamp>,
     config: RwLock<Config>,
@@ -65,7 +66,7 @@ pub struct AppData {
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct SavedData {
     status: ResourceStatus,
-    used_messages: UsedMessages,
+    used_messages: BTreeMap<GuildId, ServerUsedMessages>,
     attempts_before_notification: u8,
     last_status_change: Timestamp,
     pub config: Config,
@@ -136,37 +137,22 @@ impl SavedData {
 
 /// IDs of messages that were created by the bot to inform users about resource status changes
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
-pub struct UsedMessages {
+pub struct ServerUsedMessages {
     status: Option<MessageId>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Config {
-    resource_name: String,
-    resource_addr: String,
-    required_attempts_before_notification: u8,
-    timeout: Duration,
-    interval_between_attempts: Duration,
-    channel: Option<ChannelId>,
-    role_to_notify: Option<RoleId>,
-    up_message: String,
-    down_message: String,
+impl ServerUsedMessages {
+    pub fn new(status: Option<MessageId>) -> Self {
+        Self { status }
+    }
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            resource_name: DEFAULT_RESOURCE_NAME.to_string(),
-            resource_addr: DEFAULT_RESOURCE_ADDR.to_string(),
-            required_attempts_before_notification: DEFAULT_ATTEMPTS_BEFORE_NOTIFICATION,
-            timeout: Duration::from_secs(DEFAULT_TIMEOUT_SECS),
-            interval_between_attempts: Duration::from_secs(DEFAULT_INTERVAL_BETWEEN_ATTEMPTS_SECS),
-            channel: None,
-            role_to_notify: None,
-            up_message: DEFAULT_UP_MESSAGE.to_string(),
-            down_message: DEFAULT_DOWN_MESSAGE.to_string(),
-        }
-    }
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+pub struct Config {
+    master_server: Option<GuildId>,
+    max_servers: usize,
+    ping_config: PingConfig,
+    server_configs: BTreeMap<GuildId, ServerConfig>,
 }
 
 impl Config {
@@ -193,6 +179,57 @@ impl Config {
                     err
                 )))
             }
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PingConfig {
+    resource_name: String,
+    resource_addr: String,
+    required_attempts_before_notification: u8,
+    timeout: Duration,
+    interval_between_attempts: Duration,
+}
+
+impl Default for PingConfig {
+    fn default() -> Self {
+        Self {
+            resource_name: DEFAULT_RESOURCE_NAME.to_string(),
+            resource_addr: DEFAULT_RESOURCE_ADDR.to_string(),
+            required_attempts_before_notification: DEFAULT_ATTEMPTS_BEFORE_NOTIFICATION,
+            timeout: Duration::from_secs(DEFAULT_TIMEOUT_SECS),
+            interval_between_attempts: Duration::from_secs(DEFAULT_INTERVAL_BETWEEN_ATTEMPTS_SECS),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ServerConfig {
+    name: String,
+    channel: Option<ChannelId>,
+    role_to_notify: Option<RoleId>,
+    up_message: String,
+    down_message: String,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            name: "Noname server".to_string(),
+            channel: None,
+            role_to_notify: None,
+            up_message: DEFAULT_UP_MESSAGE.to_string(),
+            down_message: DEFAULT_DOWN_MESSAGE.to_string(),
+        }
+    }
+}
+
+impl ServerConfig {
+    fn with_name(name: String) -> Self {
+        Self {
+            name,
+            ..Default::default()
         }
     }
 }

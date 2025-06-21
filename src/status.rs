@@ -1,8 +1,10 @@
 use std::sync::{Arc, atomic::Ordering};
 
-use poise::serenity_prelude::{Channel, CreateEmbed, CreateMessage, Http, RoleId, Timestamp};
+use poise::serenity_prelude::{
+    Channel, CreateEmbed, CreateMessage, GuildId, Http, RoleId, Timestamp,
+};
 
-use crate::{Data, ResourceStatus, save_data};
+use crate::{Data, ResourceStatus, ServerUsedMessages, save_data};
 
 pub const DEFAULT_UP_MESSAGE: &str = "%%RESOURCE%% is back online, %%ROLE%%!";
 pub const DEFAULT_DOWN_MESSAGE: &str = "Nevermind, it's dead again. Boowomp :sob:.";
@@ -13,9 +15,7 @@ const TEMPLATE_RESOURCE_NAME: &str = "%%RESOURCE%%";
 const TEMPLATE_ROLE_PING: &str = "%%ROLE%%";
 
 pub async fn update_status(status: ResourceStatus, data: Data, http: Arc<Http>) {
-    let old_status_lock = data.status.read().await;
-    let old_status = *old_status_lock;
-    drop(old_status_lock);
+    let old_status = data.status.read().await.to_owned();
     if status == old_status {
         data.attempts_before_notification
             .store(0, Ordering::Relaxed);
@@ -24,7 +24,8 @@ pub async fn update_status(status: ResourceStatus, data: Data, http: Arc<Http>) 
 
     // Status changed
     let config = data.config.read().await;
-    let required_attempts_before_notification = config.required_attempts_before_notification;
+    let required_attempts_before_notification =
+        config.ping_config.required_attempts_before_notification;
     drop(config);
 
     if data
@@ -49,151 +50,184 @@ pub async fn notify_status_change(
     http: Arc<Http>,
 ) {
     let config_lock = data.config.read().await;
-    let resource_name = config_lock.resource_name.clone();
-    let role_id = config_lock.role_to_notify;
-    let channel_id = config_lock.channel;
-    let channel = match channel_id {
-        Some(id) => {
-            let channel_result = http.get_channel(id).await;
-            if let Ok(channel) = channel_result {
-                channel
-            } else {
-                log::error!(
-                    "Failed to fetch channel: {}. Notification aborted.",
-                    channel_result.unwrap_err()
-                );
-                return;
-            }
-        }
-        None => {
-            log::error!("No notification channel specified. Notification aborted.");
-            return;
-        }
-    };
-    drop(config_lock);
+    let resource_name = config_lock.ping_config.resource_name.clone();
+    let addr = data.config.read().await.ping_config.resource_addr.clone();
+    let last_status_change = data.last_status_change.read().await.to_owned();
 
-    match (old_status, new_status) {
-        (_, ResourceStatus::Unknown) => {
-            update_embed(&resource_name, new_status, data, channel, http.clone()).await;
-        }
-        (ResourceStatus::Unknown, _) => {
-            update_embed(&resource_name, new_status, data, channel, http.clone()).await;
-        }
-        (ResourceStatus::Up, ResourceStatus::Down) => {
-            let message: String = replace_templates(
-                data.config.read().await.down_message.as_str(),
-                &resource_name,
-                &role_id,
-            );
-            let send_result = channel
-                .id()
-                .send_message(http.clone(), CreateMessage::new().content(message))
-                .await;
-            match send_result {
-                Ok(message) => {
-                    log::info!("Sent new down message with id {}", message.id);
-                }
-                Err(err) => {
-                    log::error!("Failed to send new down message: {}", err);
-                    return;
+    let embed = generate_embed(resource_name.as_str(), new_status, addr, last_status_change);
+
+    for (server_id, server_config) in &config_lock.server_configs {
+        let role_id = server_config.role_to_notify;
+        let channel_id = server_config.channel;
+        let channel = match channel_id {
+            Some(id) => {
+                let channel_result = http.clone().get_channel(id).await;
+                if let Ok(channel) = channel_result {
+                    channel
+                } else {
+                    log::warn!(
+                        "[server {}] Failed to fetch channel: {}. Notification aborted.",
+                        server_id,
+                        channel_result.unwrap_err()
+                    );
+                    continue;
                 }
             }
-            update_embed(&resource_name, new_status, data, channel, http.clone()).await;
-        }
-        (ResourceStatus::Down, ResourceStatus::Up) => {
-            let message: String = replace_templates(
-                data.config.read().await.up_message.as_str(),
-                &resource_name,
-                &role_id,
-            );
-            let send_result = channel
-                .id()
-                .send_message(http.clone(), CreateMessage::new().content(message))
-                .await;
-            match send_result {
-                Ok(message) => {
-                    log::info!("Sent new up message with id {}", message.id);
-                }
-                Err(err) => {
-                    log::error!("Failed to send new up message: {}", err);
-                    return;
-                }
+            None => {
+                log::warn!(
+                    "[server {}] No notification channel specified. Notification aborted.",
+                    server_id
+                );
+                continue;
             }
-            update_embed(&resource_name, new_status, data, channel, http).await;
+        };
+
+        match (old_status, new_status) {
+            (_, ResourceStatus::Unknown) => {
+                update_embed(*server_id, &embed, data.clone(), channel, http.clone()).await;
+            }
+            (ResourceStatus::Unknown, _) => {
+                update_embed(*server_id, &embed, data.clone(), channel, http.clone()).await;
+            }
+            (ResourceStatus::Up, ResourceStatus::Down) => {
+                let message: String = replace_templates(
+                    server_config.down_message.as_str(),
+                    &resource_name,
+                    &role_id,
+                );
+                let send_result = channel
+                    .id()
+                    .send_message(http.clone(), CreateMessage::new().content(message))
+                    .await;
+                match send_result {
+                    Ok(message) => {
+                        log::info!(
+                            "[server {}] Sent new down message with id {}",
+                            server_id,
+                            message.id
+                        );
+                    }
+                    Err(err) => {
+                        log::error!(
+                            "[server {}] Failed to send new down message: {}",
+                            server_id,
+                            err
+                        );
+                        continue;
+                    }
+                }
+                update_embed(*server_id, &embed, data.clone(), channel, http.clone()).await;
+            }
+            (ResourceStatus::Down, ResourceStatus::Up) => {
+                let message: String =
+                    replace_templates(server_config.up_message.as_str(), &resource_name, &role_id);
+                let send_result = channel
+                    .id()
+                    .send_message(http.clone(), CreateMessage::new().content(message))
+                    .await;
+                match send_result {
+                    Ok(message) => {
+                        log::info!(
+                            "[server {}] Sent new up message with id {}",
+                            server_id,
+                            message.id
+                        );
+                    }
+                    Err(err) => {
+                        log::error!(
+                            "[server {}] Failed to send new up message: {}",
+                            server_id,
+                            err
+                        );
+                        continue;
+                    }
+                }
+                update_embed(*server_id, &embed, data.clone(), channel, http.clone()).await;
+            }
+            _ => unreachable!(),
         }
-        _ => unreachable!(),
     }
+
+    drop(config_lock);
 }
 
 pub async fn update_embed(
-    resource_name: &str,
-    new_status: ResourceStatus,
+    server_id: GuildId,
+    embed: &CreateEmbed,
     data: Data,
     channel: Channel,
     http: Arc<Http>,
 ) {
-    let mut messages = data.used_messages.write().await;
-    let addr = data.config.read().await.resource_addr.clone();
-    let last_status_change = data.last_status_change.read().await;
+    // let's just pray this staff will not cause any deadlocks
+    log::trace!("Acquiring message_lock in update_embed...");
+    let messages_lock = &mut data.used_messages.write().await;
+    let status_message = messages_lock.entry(server_id).or_default().status;
 
-    match messages.status {
+    match status_message {
         Some(id) => {
             let message_result = http.get_message(channel.id(), id).await;
             match message_result {
                 Ok(message) => {
                     let deletion_result = message.delete(http.clone()).await;
                     if let Err(err) = deletion_result {
-                        log::error!("Failed to delete old status message: {}", err);
+                        log::error!(
+                            "[server {}] Failed to delete old status message: {}",
+                            server_id,
+                            err
+                        );
                         return;
                     } else {
-                        log::info!("Deleted old status message");
+                        log::info!("[server {}] Deleted old status message", server_id);
                     }
                     let send_result = channel
                         .id()
-                        .send_message(
-                            http,
-                            CreateMessage::new().embed(generate_embed(
-                                resource_name,
-                                new_status,
-                                addr,
-                                *last_status_change,
-                            )),
-                        )
+                        .send_message(http, CreateMessage::new().embed(embed.clone()))
                         .await;
                     match send_result {
                         Ok(message) => {
-                            messages.status = Some(message.id);
-                            log::info!("Sent new status message with id {}", message.id);
+                            messages_lock
+                                .insert(server_id, ServerUsedMessages::new(Some(message.id)));
+                            log::info!(
+                                "[server {}] Sent new status message with id {}",
+                                server_id,
+                                message.id
+                            );
                         }
                         Err(err) => {
-                            log::error!("Failed to send new status message: {}", err);
+                            log::error!(
+                                "[server {}] Failed to send new status message: {}",
+                                server_id,
+                                err
+                            );
                         }
                     }
                 }
                 Err(err) => {
                     log::warn!(
-                        "Failed to fetch status message because of: {}. Creating new one...",
+                        "[server {}] Failed to fetch status message because of: {}. Creating new one...",
+                        server_id,
                         err
                     );
                     let send_result = channel
                         .id()
-                        .send_message(
-                            http,
-                            CreateMessage::new().embed(generate_embed(
-                                resource_name,
-                                new_status,
-                                addr,
-                                *last_status_change,
-                            )),
-                        )
+                        .send_message(http, CreateMessage::new().embed(embed.clone()))
                         .await;
                     match send_result {
                         Ok(message) => {
-                            messages.status = Some(message.id);
-                            log::info!("Sent new status message with id {}", message.id);
+                            messages_lock
+                                .insert(server_id, ServerUsedMessages::new(Some(message.id)));
+                            log::info!(
+                                "[server {}] Sent new status message with id {}",
+                                server_id,
+                                message.id
+                            );
                         }
                         Err(err) => {
-                            log::error!("Failed to send new status message: {}", err);
+                            log::error!(
+                                "[server {}] Failed to send new status message: {}",
+                                server_id,
+                                err
+                            );
                         }
                     }
                 }
@@ -203,23 +237,23 @@ pub async fn update_embed(
             log::info!("No status message detected. Creating new one...",);
             let send_result = channel
                 .id()
-                .send_message(
-                    http,
-                    CreateMessage::new().embed(generate_embed(
-                        resource_name,
-                        new_status,
-                        addr,
-                        *last_status_change,
-                    )),
-                )
+                .send_message(http, CreateMessage::new().embed(embed.clone()))
                 .await;
             match send_result {
                 Ok(message) => {
-                    messages.status = Some(message.id);
-                    log::info!("Sent new status message with id {}", message.id);
+                    messages_lock.insert(server_id, ServerUsedMessages::new(Some(message.id)));
+                    log::info!(
+                        "[server {}] Sent new status message with id {}",
+                        server_id,
+                        message.id
+                    );
                 }
                 Err(err) => {
-                    log::error!("Failed to send new status message: {}", err);
+                    log::error!(
+                        "[server {}] Failed to send new status message: {}",
+                        server_id,
+                        err
+                    );
                 }
             }
         }
@@ -236,17 +270,17 @@ pub fn generate_embed(
     match new_status {
         ResourceStatus::Up => {
             new_embed = new_embed
-                .color((21, 250, 59))
+                .colour((21, 250, 59))
                 .title(format!("{} is online!", resource_name));
         }
         ResourceStatus::Down => {
             new_embed = new_embed
-                .color((220, 23, 30))
+                .colour((220, 23, 30))
                 .title(format!("{} is offline!", resource_name));
         }
         ResourceStatus::Unknown => {
             new_embed = new_embed
-                .color((215, 187, 10))
+                .colour((215, 187, 10))
                 .title(format!("{} status is unknown...", resource_name))
                 .description("Some kind of error occured. Notify maintainers!");
         }

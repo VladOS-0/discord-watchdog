@@ -19,9 +19,9 @@ pub async fn ping_task(data: Data, http: Arc<Http>) -> Result<(), task::JoinErro
             interval.tick().await;
             icmp_sequence += 1;
             let config_lock = data.config.read().await;
-            let interval_duration = config_lock.interval_between_attempts;
-            let timeout = config_lock.timeout;
-            let addr = &config_lock.resource_addr;
+            let interval_duration = config_lock.ping_config.interval_between_attempts;
+            let timeout = config_lock.ping_config.timeout;
+            let addr = &config_lock.ping_config.resource_addr;
             interval = time::interval(interval_duration);
             interval.tick().await;
 
